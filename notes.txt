@@ -1,0 +1,4 @@
+Paper width 57
+Margin 5
+
+Want an odd number of characters in every line if page width is odd?

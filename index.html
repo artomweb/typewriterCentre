@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cupcake">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Document</title>
+    <script type="module" src="src/main.js"></script>
+  </head>
+  <body class="flex flex-col items-center">
+    <!-- Input Section -->
+    <div class="w-full max-w-xs mt-4">
+      <fieldset
+        class="fieldset bg-base-200 border border-base-300 p-4 rounded-box">
+        <legend class="fieldset-legend">Page details</legend>
+
+        <label class="fieldset-label">Page Width</label>
+        <input
+          id="pageWidth"
+          type="number"
+          class="input validator w-full"
+          required
+          placeholder="Type a number between 1 to 100"
+          min="1"
+          max="100"
+          title="Must be between 1 to 100" />
+        <p class="validator-hint">Must be between 1 to 100</p>
+
+        <label class="fieldset-label">Max Title Width</label>
+        <input
+          id="maxTitleWidth"
+          type="number"
+          class="input validator w-full"
+          required
+          placeholder="Type a number between 1 to 100"
+          min="1"
+          max="10"
+          title="Must be between 1 to 100" />
+        <p class="validator-hint">Must be between 1 to 100</p>
+
+        <label class="fieldset-label">Page Title</label>
+        <input
+          required
+          id="pageTitle"
+          type="text"
+          class="input w-full"
+          placeholder="Your page title" />
+      </fieldset>
+    </div>
+
+    <div>
+      <canvas
+        id="paperMockup"
+        class="mt-4 border border-gray-300 rounded-lg shadow-lg bg-white w-full"></canvas>
+    </div>
+  </body>
+</html>

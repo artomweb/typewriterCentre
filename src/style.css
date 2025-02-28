@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: cupcake;
+}
+
+@font-face {
+  font-family: "IBM";
+  font-display: swap;
+  src: url("/IBMPlexMono-Regular.ttf") format("truetype");
+}
+
+h2 {
+  @apply text-lg font-bold;
+}
