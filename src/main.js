@@ -91,7 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const isWholeNumber = spacesNeeded === roundedSpacesNeeded;
 
       // Calculate the position of the line based on the rounded spaces
-      const spaceCountText = `${spacesNeeded}`.padStart(3, " ");
+      const spaceCountText = `${spacesNeeded}`.padStart(4, " ");
       const x =
         (canvasWidth - ctx.measureText(`${spaceCountText} ${line}`).width) / 2;
 
