@@ -21,6 +21,12 @@ See it [here](https://type.artomweb.com)
 - To adjust the title width you can enter it at the top or drag the margin line
 - The page details are saved to local storage so you don't have to input the page width each time
 
+## Thinking
+
+If the page width is odd then you need an odd number of characters in each line to have a whole number of leading spaces.
+
+Is it possible to centre every given title? Can you keep re-shuffling the lines until it has a whole number of leading spaces on every line?
+
 ## TODO
 
 - Make the interface look like a type writer? At minimum a better form
