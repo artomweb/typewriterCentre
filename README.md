@@ -13,5 +13,12 @@ This is fine and easy for short titles, but annoying when the title is long. Wha
 
 ## The solution
 
-[]()
+See it [here](https://type.artomweb.com)
 ![](demo.gif)
+
+- The number at the beginning of each line is the number of spaces required
+- Numbers are red when the line requires a non-integer number of spaces, you can adjust the title width to find a solution with a whole number of spaces
+
+## TODO
+
+- Make the interface look like a type writer? At minimum a better form
