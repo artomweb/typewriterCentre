@@ -14,3 +14,4 @@ This is fine and easy for short titles, but annoying when the title is long. Wha
 ## The solution
 
 []()
+![](demo.gif)
