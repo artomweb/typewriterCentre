@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let isDragging = false;
   let centeredLines;
 
+  // Get the saved values from local storage
   function restoreSavedInputs() {
     const savedWidth = localStorage.getItem("pageWidth");
     const savedTitle = localStorage.getItem("pageTitle");
@@ -31,6 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPageLayout();
   }
 
+  // Calculate the spacing required for the title
   function renderPageLayout() {
     const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
     const maxTitleWidthValue = Math.max(
@@ -68,6 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
     drawCanvasContent();
   }
 
+  // draw the text and line on the canvas (after clearing)
   function drawCanvasContent() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -113,7 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.stroke();
 
     const arrowSize = 8;
-    const arrowOffset = 30; // The vertical offset from the top of the canvas for arrows
+    const arrowOffset = 30;
 
     // Left arrow
     ctx.beginPath();
@@ -174,18 +177,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
 
+    // If the mouse is near the line
     if (Math.abs(mouseX - lineX) < 10) {
       isDragging = true;
       canvas.style.cursor = "grabbing";
     }
   });
 
+  // mouse up anywhere on the page
   document.addEventListener("mouseup", () => {
     isDragging = false;
     canvas.style.cursor = "default";
     drawCanvasContent();
   });
 
+  // would like this to work but the validation doesn't really work
   function restrictMaxTitleWidth() {
     maxTitleWidth.setAttribute("max", pageWidth.value || 100);
     maxTitleWidthHint.textContent = `Must be between 1 and ${
@@ -193,6 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } (less than page width)`;
   }
 
+  // Update the line position on the canvas with the value from the form
   function positionLineFromInputs() {
     const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
     const maxTitleWidthValue = Math.max(
@@ -209,6 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (lineX > canvasWidth) lineX = canvasWidth;
   }
 
+  // When anything in the form changes
   function processInputChange(event) {
     const inputId = event.target.id;
     const value = event.target.value;
@@ -221,12 +229,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     positionLineFromInputs();
     renderPageLayout();
+    // save to local storage after every change
     localStorage.setItem(inputId, value);
   }
 
   restoreSavedInputs();
   positionLineFromInputs();
 
+  // Show page again when font is loaded
   font.load().then(() => {
     renderPageLayout();
   });
