@@ -223,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     console.log(`Input ${inputId} changed to: ${value}`);
 
-    if (inputId === "maxTitleWidth") {
+    if (inputId === "maxTitleWidth" || inputId === "pageWidth") {
       restrictMaxTitleWidth();
     }
 
