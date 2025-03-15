@@ -30,17 +30,7 @@ Is it possible to centre every given title? Can you keep re-shuffling the lines 
 
 Is there a closed form solution to checking if a title can be centred? If the line length has the same parity as the pageWidth.
 
-### For centering on 57 (odd)
-
-#### Example 1
-
-Even (even)
-
-#### Example 2
-
-Deer roam over even turf.
-Deer roam (odd)
-over even turf (even)
+> I have written the function `canBeCentered` which tries every combination of line splits to see if the title can be centered (with integer spaces). I don't believe there is a closed form solution.
 
 ## TODO
 
