@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const pageWidth = document.getElementById("pageWidth");
   const pageTitle = document.getElementById("pageTitle");
   const maxTitleWidth = document.getElementById("maxTitleWidth");
+  const cannotBeCentred = document.getElementById("cannotBeCentred");
   const maxTitleWidthHint = maxTitleWidth.nextElementSibling;
   const canvas = document.getElementById("paperMockup");
   const ctx = canvas.getContext("2d");
@@ -39,8 +40,19 @@ document.addEventListener("DOMContentLoaded", () => {
       1,
       Math.min(parseFloat(maxTitleWidth.value) || 20, pageWidthValue)
     );
-    const title = pageTitle.value || "";
+
+    const title = pageTitle.value.trim() || "";
+
     const words = title.split(" ");
+
+    cannotBeCentred.style.visibility = canBeCentered(
+      title,
+      pageWidthValue,
+      pageWidthValue
+    )
+      ? "hidden"
+      : "visible";
+
     let lines = [];
     let currentLine = [];
 
@@ -63,11 +75,53 @@ document.addEventListener("DOMContentLoaded", () => {
       return { line, spacesNeeded };
     });
 
-    console.log(centeredLines.join("\n")); // Debug: full text layout
-    console.log(lines.map((line) => (pageWidthValue - line.length) / 2)); // Debug: indents
-    console.log(lines.map((line) => line.length)); // Debug: line lengths
+    // console.log(centeredLines); // Debug: full text layout
+    // console.log(lines.map((line) => (pageWidthValue - line.length) / 2)); // Debug: indents
+    // console.log(lines.map((line) => line.length)); // Debug: line lengths
 
     drawCanvasContent();
+  }
+
+  function canBeCentered(title, pageWidthValue, maxTitleWidthValue) {
+    const words = title.trim().split(/\s+/);
+    const N = words.length;
+    if (N === 0) return true;
+
+    const targetParity = pageWidthValue % 2;
+    const prefixSums = [0];
+    for (let i = 1; i <= N; i++) {
+      prefixSums[i] = prefixSums[i - 1] + words[i - 1].length;
+    }
+    const sumWords = prefixSums[N];
+
+    // Early check for t=1 necessary condition
+    if (targetParity === 1 && (sumWords + N) % 2 !== 0) {
+      return false;
+    }
+
+    const memo = new Array(N + 1).fill("-1");
+
+    function canSplit(start) {
+      if (start === N) return true;
+      if (memo[start] !== -1) return memo[start];
+
+      for (let end = start + 1; end <= N; end++) {
+        const numWords = end - start;
+        const sum = prefixSums[end] - prefixSums[start];
+        const lineLength = sum + numWords - 1;
+
+        if (lineLength > maxTitleWidthValue) break;
+        if (lineLength % 2 === targetParity && canSplit(end)) {
+          memo[start] = true;
+          return true;
+        }
+      }
+
+      memo[start] = false;
+      return false;
+    }
+
+    return canSplit(0);
   }
 
   // draw the text and line on the canvas (after clearing)

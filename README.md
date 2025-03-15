@@ -27,6 +27,20 @@ If the page width is odd then you need an odd number of characters in each line 
 
 Is it possible to centre every given title? Can you keep re-shuffling the lines until it has a whole number of leading spaces on every line?
 
+Is there a closed form solution to checking if a title can be centred? If the line length has the same parity as the pageWidth.
+
+### For centering on 57 (odd)
+
+#### Example 1
+
+Even (even)
+
+#### Example 2
+
+Deer roam over even turf.
+Deer roam (odd)
+over even turf (even)
+
 ## TODO
 
 - Make the interface look like a type writer? At minimum a better form
