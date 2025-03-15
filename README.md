@@ -19,6 +19,7 @@ See it [here](https://type.artomweb.com)
 - The number at the beginning of each line is the number of spaces required to get to the first letter
 - Numbers are red when the line requires a non-integer number of spaces, you can adjust the title width to find a solution with a whole number of spaces
 - To adjust the title width you can enter it at the top or drag the margin line
+- If it is not possible to centre the title, "Cannot be centered" will appear under the text box
 - The page details are saved to local storage so you don't have to input the page width each time
 
 ## Thinking
