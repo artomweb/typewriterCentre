@@ -1,6 +1,9 @@
 import "./style.css";
 const font = new FontFace("IBM", 'url("/IBMPlexMono-Regular.ttf")');
 
+import { findBestSplit, diagnoseFailure } from "./centring.js";
+
+
 document.addEventListener("DOMContentLoaded", () => {
   const pageWidth = document.getElementById("pageWidth");
   const pageTitle = document.getElementById("pageTitle");
@@ -18,6 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let lineX = canvas.width / 2;
   let isDragging = false;
   let centeredLines;
+  let cannotBeCentredTimeout = null;
 
   // Get the saved values from local storage
   function restoreSavedInputs() {
@@ -33,95 +37,53 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPageLayout();
   }
 
+  function greedyWrap(title, maxWidth) {
+    const words = title.split(" ");
+    const lines = [];
+    let current = [];
+
+    for (const word of words) {
+      const lineIfAdded = [...current, word].join(" ");
+      if (lineIfAdded.length <= maxWidth) {
+        current.push(word);
+      } else {
+        if (current.length) lines.push(current.join(" "));
+        current = [word];
+      }
+    }
+    if (current.length) lines.push(current.join(" "));
+    return lines;
+  }
+
   // Calculate the spacing required for the title
   function renderPageLayout() {
     const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
-    const maxTitleWidthValue = Math.max(
-      1,
-      Math.min(parseFloat(maxTitleWidth.value) || 20, pageWidthValue)
-    );
+    const maxTitleWidthValue = Math.max(1, Math.min(parseFloat(maxTitleWidth.value) || 20, pageWidthValue));
 
     const title = pageTitle.value.trim() || "";
 
-    const words = title.split(" ");
+    const lines = findBestSplit(title, pageWidthValue, maxTitleWidthValue);
 
-    cannotBeCentred.style.visibility = canBeCentered(
-      title,
-      pageWidthValue,
-      pageWidthValue
-    )
-      ? "hidden"
-      : "visible";
+    clearTimeout(cannotBeCentredTimeout);
 
-    let lines = [];
-    let currentLine = [];
+    if (lines === null) {
+      cannotBeCentredTimeout = setTimeout(() => {
+        cannotBeCentred.style.visibility = "visible";
+        const diagnosis = diagnoseFailure(title, pageWidthValue, maxTitleWidthValue);
+        cannotBeCentred.textContent = diagnosis ? diagnosis.message : "";
+      }, 500);
+    } else {
+      cannotBeCentred.style.visibility = "hidden";
+    }
 
-    words.forEach((word) => {
-      if (
-        currentLine.join(" ").length + word.length + currentLine.length <=
-        maxTitleWidthValue
-      ) {
-        currentLine.push(word);
-      } else {
-        lines.push(currentLine.join(" "));
-        currentLine = [word];
-      }
-    });
+    const displayLines = lines ?? greedyWrap(title, maxTitleWidthValue);
 
-    if (currentLine.length) lines.push(currentLine.join(" "));
-
-    centeredLines = lines.map((line) => {
-      const spacesNeeded = (pageWidthValue - line.length) / 2;
-      return { line, spacesNeeded };
-    });
-
-    // console.log(centeredLines); // Debug: full text layout
-    // console.log(lines.map((line) => (pageWidthValue - line.length) / 2)); // Debug: indents
-    // console.log(lines.map((line) => line.length)); // Debug: line lengths
+    centeredLines = displayLines.map((line) => ({
+      line,
+      spacesNeeded: (pageWidthValue - line.length) / 2,
+    }));
 
     drawCanvasContent();
-  }
-
-  function canBeCentered(title, pageWidthValue, maxTitleWidthValue) {
-    const words = title.trim().split(/\s+/);
-    const N = words.length;
-    if (N === 0) return true;
-
-    const targetParity = pageWidthValue % 2;
-    const prefixSums = [0];
-    for (let i = 1; i <= N; i++) {
-      prefixSums[i] = prefixSums[i - 1] + words[i - 1].length;
-    }
-    const sumWords = prefixSums[N];
-
-    // Early check for t=1 necessary condition
-    if (targetParity === 1 && (sumWords + N) % 2 !== 0) {
-      return false;
-    }
-
-    const memo = new Array(N + 1).fill("-1");
-
-    function canSplit(start) {
-      if (start === N) return true;
-      if (memo[start] !== -1) return memo[start];
-
-      for (let end = start + 1; end <= N; end++) {
-        const numWords = end - start;
-        const sum = prefixSums[end] - prefixSums[start];
-        const lineLength = sum + numWords - 1;
-
-        if (lineLength > maxTitleWidthValue) break;
-        if (lineLength % 2 === targetParity && canSplit(end)) {
-          memo[start] = true;
-          return true;
-        }
-      }
-
-      memo[start] = false;
-      return false;
-    }
-
-    return canSplit(0);
   }
 
   // draw the text and line on the canvas (after clearing)
@@ -146,8 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Calculate the position of the line based on the rounded spaces
       const spaceCountText = `${spacesNeeded}`.padStart(4, " ");
-      const x =
-        (canvasWidth - ctx.measureText(`${spaceCountText} ${line}`).width) / 2;
+      const x = (canvasWidth - ctx.measureText(`${spaceCountText} ${line}`).width) / 2;
 
       // Draw space count text in black or red based on if it's a whole number
       ctx.fillStyle = isWholeNumber ? "black" : "red";
@@ -155,11 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Draw the actual line in gray
       ctx.fillStyle = "gray";
-      ctx.fillText(
-        line,
-        x + ctx.measureText(spaceCountText).width,
-        startY + index * lineHeight
-      );
+      ctx.fillText(line, x + ctx.measureText(spaceCountText).width, startY + index * lineHeight);
     });
 
     ctx.beginPath();
@@ -216,14 +173,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // Ensure maxTitleWidth does not go below 1
       newMaxTitleWidth = Math.max(1, newMaxTitleWidth);
 
-      // Update the input field and localStorage only if the value changes
       if (newMaxTitleWidth !== parseFloat(maxTitleWidth.value)) {
         maxTitleWidth.value = newMaxTitleWidth;
         localStorage.setItem("maxTitleWidth", newMaxTitleWidth);
+        positionLineFromInputs();
+        renderPageLayout();
       }
-
-      positionLineFromInputs();
-      renderPageLayout();
     }
   });
 
@@ -248,18 +203,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // would like this to work but the validation doesn't really work
   function restrictMaxTitleWidth() {
     maxTitleWidth.setAttribute("max", pageWidth.value || 100);
-    maxTitleWidthHint.textContent = `Must be between 1 and ${
-      pageWidth.value || 100
-    } (less than page width)`;
+    maxTitleWidthHint.textContent = `Must be between 1 and ${pageWidth.value || 100} (less than page width)`;
   }
 
   // Update the line position on the canvas with the value from the form
   function positionLineFromInputs() {
     const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
-    const maxTitleWidthValue = Math.max(
-      1,
-      Math.min(parseFloat(maxTitleWidth.value) || 20, pageWidthValue)
-    );
+    const maxTitleWidthValue = Math.max(1, Math.min(parseFloat(maxTitleWidth.value) || 20, pageWidthValue));
     const charWidth = canvasWidth / pageWidthValue;
     const center = canvasWidth / 2;
     const offsetChars = maxTitleWidthValue / 2;

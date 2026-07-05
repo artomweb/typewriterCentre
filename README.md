@@ -24,13 +24,36 @@ See it [here](https://type.artomweb.com)
 
 ## Thinking
 
-If the page width is odd then you need an odd number of characters in each line to have a whole number of leading spaces.
+My approach is based on the [Knuth–Plass](https://en.wikipedia.org/wiki/Knuth%E2%80%93Plass_line-breaking_algorithm) algorithm used originally in TeX for justification in a visually appealing way.
 
-Is it possible to centre every given title? Can you keep re-shuffling the lines until it has a whole number of leading spaces on every line?
+So we want to centre a title, this is usually done with `(pageWidth - lineLength)/2` spaces before the first character. However, this could sometimes result in a non-integer number of characters and the typewriter can only move across in integer spaces. For that equation to be a whole number, both `pageWidth` and `lineLength` must have the same parity (both even or both odd). 
 
-Is there a closed form solution to checking if a title can be centred? If the line length has the same parity as the pageWidth.
+So for a given set of words, which splitting of the words looks visually balanced while satisfying the parity constraint. 
 
-> I have written the function `canBeCentered` which tries every combination of line splits to see if the title can be centered (with integer spaces). I don't believe there is a closed form solution.
+An alternative to the Knuth-Plass is a greedy algorithm where you pack as many words onto each line before the margin then spill to the next. This does not consider parity and it never goes back on itself to consider a better solution if it had put less words on a longer line.
+
+### Knuth-Plass algorithm
+
+The original Knuth-Plass algorithm for TeX is described in [Breaking Paragraphs into Lines (1981)](https://gwern.net/doc/design/typography/tex/1981-knuth.pdf). Knuth-Plass treats every position between words as a potential breakpoint. The word boundaries are numbered `0` to `N` where `0` is before the first word and `N` is after the last. Each node in the graph represents all the words placed up until that position. An edge from nodes `i` to `j` means put words `i` through `j-1` on one line.
+
+
+#### The cost function
+
+An edge only exists if placing those words on one line is feasible. In TeX this means that the line isn't too loose or tight (the spacing between the words is variable). For the typewriter, this could be both the margin width and the parity.
+
+TeX's badness metric for a line is roughly `((idealWidth - actualWidth) / idealWidth)^3`. The equation is cubed so that one very bad line is penalised much more heavily than two moderately bad lines. This discourages the algorithm from making one line terrible to make others perfect. 
+
+Each edge on the graph has this cost function. The total cost of a paragraph layout is the sum of the costs along the lines across the graph. Additional merit functions are added for things like two consecutive very loose lines or two hyphenated lines in a row.
+
+Finding th layout with the minimal cost is therefore finding the shortest path from node `0` to node `N`. Because lines can only be broken, the edges on the graph only go one way, this means it is a solved problem with O(n^2) complexity where `n` is the number of words.
+
+### Typewriter adaptation
+
+My cost function is `(pageWidth - LineLength)^2`. Squaring is used as the inter-word gap is always the same so you can't get really bad looking lines as with TeX. The cost function still minimises the total wasted space with larger deviations penalised disproportionately.
+
+A line of length L on a page of width W wastes W - L character positions (half on each side). Minimising Σ(W - Lᵢ)² is equivalent to minimising variance in line lengths, which is what you want visually, lines of similar length look more balanced than one long and one short.
+
+In TeX, the badness score can get really really big, but in the typewriter problem, there criteria is a binary decision. If the line does not have the correct parity, the algorithm returns null as it really has infinite cost.
 
 ## TODO
 
