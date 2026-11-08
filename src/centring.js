@@ -1,4 +1,11 @@
 /**
+ * Split a title into words, ignoring leading, trailing and repeated whitespace.
+ */
+function splitWords(title) {
+  return title.trim().split(/\s+/).filter(Boolean);
+}
+
+/**
  * Build prefix sums of word character lengths.
  * prefixSums[i] = sum of lengths of words[0..i-1].
  * Allows O(1) computation of the length of any word range.
@@ -32,7 +39,7 @@ function lineLen(ps, start, end) {
  * @returns {string[] | null}
  */
 function findBestSplit(title, pageWidth, maxTitleWidth) {
-  const words = title.trim().split(/\s+/).filter(Boolean);
+  const words = splitWords(title);
   const N = words.length;
   if (N === 0) return [];
 
@@ -42,17 +49,26 @@ function findBestSplit(title, pageWidth, maxTitleWidth) {
   const parity = pageWidth % 2; // 0 = even page, 1 = odd page
   const ps = buildPrefixSums(words);
 
+  // Never break the title more than it needs to be: a typist would rather put
+  // a short title on one line half a space off-centre than split it to fix
+  // parity. Greedy wrapping gives the minimum number of lines.
+  const minLines = greedyWrap(title, maxTitleWidth).length;
+
   // --- DP table ---
   // dp[i] = best node reachable from word index i to the end.
-  //   cost : total demerits from this point onward (Infinity if unreachable)
-  //   next : index of the first word on the *next* line (i.e. this line is
-  //          words[i .. next-1])
+  //   lines : number of lines from this point onward
+  //   cost  : total demerits from this point onward (Infinity if unreachable)
+  //   next  : index of the first word on the *next* line (i.e. this line is
+  //           words[i .. next-1])
+  // Layouts are compared by fewest lines first, then lowest cost.
   const dp = new Array(N + 1).fill(null).map(() => ({
+    lines: Infinity,
     cost: Infinity,
     next: -1,
   }));
 
   // Base case: having placed all words, cost is 0.
+  dp[N].lines = 0;
   dp[N].cost = 0;
 
   // Fill right-to-left (suffix DP), so dp[start] can reference dp[end].
@@ -74,16 +90,18 @@ function findBestSplit(title, pageWidth, maxTitleWidth) {
       // Squared deviation from page width.
       const lineCost = (pageWidth - len) ** 2;
       const totalCost = lineCost + dp[end].cost;
+      const totalLines = 1 + dp[end].lines;
 
-      if (totalCost < dp[start].cost) {
+      if (totalLines < dp[start].lines || (totalLines === dp[start].lines && totalCost < dp[start].cost)) {
+        dp[start].lines = totalLines;
         dp[start].cost = totalCost;
         dp[start].next = end;
       }
     }
   }
 
-  // No valid split found.
-  if (dp[0].cost === Infinity) return null;
+  // No valid split found, or the only ones break the title more than needed.
+  if (dp[0].cost === Infinity || dp[0].lines > minLines) return null;
 
   // Reconstruct lines by following the `next` chain from index 0.
   const lines = [];
@@ -94,45 +112,56 @@ function findBestSplit(title, pageWidth, maxTitleWidth) {
     pos = next;
   }
 
-  console.log({
-  pageWidth,
-  maxTitleWidth,
-  title,
-  lines,
-  spacesPerLine: lines.map(l => (pageWidth - l.length) / 2),
-  totalDemerits: dp[0].cost,
-});
-
-
   return lines;
 }
 
-function canBeCentered(title, pageWidth, maxTitleWidth) {
-  return findBestSplit(title, pageWidth, maxTitleWidth) !== null;
+/**
+ * Greedy line wrapping: pack as many words as fit on each line. Used to show
+ * the title when no split can be centred. Ignores parity, and a word longer
+ * than maxWidth gets a line to itself.
+ */
+function greedyWrap(title, maxWidth) {
+  const lines = [];
+  let current = [];
+
+  for (const word of splitWords(title)) {
+    const lineIfAdded = [...current, word].join(" ");
+    if (lineIfAdded.length <= maxWidth) {
+      current.push(word);
+    } else {
+      if (current.length) lines.push(current.join(" "));
+      current = [word];
+    }
+  }
+  if (current.length) lines.push(current.join(" "));
+  return lines;
 }
 
-function otherMarginWouldWork(title, pageWidth, maxTitleWidth) {
-  for (let m = 1; m <= pageWidth; m++) {
-    if (m === maxTitleWidth) continue;
-    if (findBestSplit(title, pageWidth, m) !== null) return true;
+/**
+ * The max title width closest to the current one that allows the title to be
+ * centred, or null if no width between 1 and pageWidth works. On a tie the
+ * wider margin wins.
+ */
+function nearestWorkingMaxTitleWidth(title, pageWidth, maxTitleWidth) {
+  for (let d = 1; d < pageWidth; d++) {
+    for (const m of [maxTitleWidth + d, maxTitleWidth - d]) {
+      if (m < 1 || m > pageWidth) continue;
+      if (findBestSplit(title, pageWidth, m) !== null) return m;
+    }
   }
-  return false;
+  return null;
 }
 
 function diagnoseFailure(title, pageWidth, maxTitleWidth) {
-  const words = title.trim().split(/\s+/).filter(Boolean);
+  const words = splitWords(title);
   if (words.length === 0) return null;
 
-  const tooLongWord = words.find((w) => w.length > maxTitleWidth);
-  if (tooLongWord) {
-    return otherMarginWouldWork(title, pageWidth, maxTitleWidth)
-      ? { reason: "word-too-long-fixable", message: "Cannot be centred due to margin" }
-      : { reason: "word-too-long", message: "Cannot be centred" };
-  }
+  const suggestedMaxTitleWidth = nearestWorkingMaxTitleWidth(title, pageWidth, maxTitleWidth);
+  const cause = words.some((w) => w.length > maxTitleWidth) ? "word-too-long" : "no-parity-split";
 
-  return otherMarginWouldWork(title, pageWidth, maxTitleWidth)
-    ? { reason: "no-parity-split-fixable", message: "Cannot be centred due to margin" }
-    : { reason: "no-parity-split", message: "Cannot be centred" };
+  return suggestedMaxTitleWidth === null
+    ? { reason: cause, message: "Cannot be centred", suggestedMaxTitleWidth }
+    : { reason: `${cause}-fixable`, message: "Cannot be centred due to margin", suggestedMaxTitleWidth };
 }
 
-export { findBestSplit, diagnoseFailure };
+export { findBestSplit, greedyWrap, diagnoseFailure };

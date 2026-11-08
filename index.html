@@ -14,7 +14,7 @@
         class="fieldset bg-base-200 border border-base-300 p-4 rounded-box">
         <legend class="fieldset-legend">Page details</legend>
 
-        <label class="fieldset-label">Page Width</label>
+        <label class="fieldset-label" for="pageWidth">Page Width</label>
         <input
           id="pageWidth"
           type="number"
@@ -24,7 +24,7 @@
           min="1"
           max="100" />
 
-        <label class="fieldset-label">Max Title Width</label>
+        <label class="fieldset-label" for="maxTitleWidth">Max Title Width</label>
         <input
           id="maxTitleWidth"
           type="number"
@@ -32,11 +32,11 @@
           required
           placeholder="Type a number between 1 to 100"
           min="1"
-          max="10"
-          title="Must be between 1 to 100" />
-        <p class="validator-hint">Must be between 1 to 100</p>
+          max="100"
+          title="Must be between 1 and the page width" />
+        <p class="validator-hint">Must be between 1 and 100</p>
 
-        <label class="fieldset-label">Page Title</label>
+        <label class="fieldset-label" for="pageTitle">Page Title</label>
         <input
           required
           id="pageTitle"
@@ -45,7 +45,7 @@
           placeholder="Your page title" />
 
         <p class="text-red-600" id="cannotBeCentred" style="visibility: hidden">
-          Cannot be centered
+          Cannot be centred
         </p>
       </fieldset>
     </div>
@@ -53,7 +53,6 @@
     <div>
       <canvas
         id="paperMockup"
-        class="mt-4 border border-gray-300 rounded-lg shadow-lg bg-white w-full"></canvas>
-    </div>
+        class="mt-4 border border-gray-300 rounded-lg shadow-lg bg-white w-[800px] max-w-full touch-pan-y"></canvas>    </div>
   </body>
 </html>

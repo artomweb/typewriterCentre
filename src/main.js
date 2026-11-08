@@ -1,8 +1,13 @@
 import "./style.css";
-const font = new FontFace("IBM", 'url("/IBMPlexMono-Regular.ttf")');
 
-import { findBestSplit, diagnoseFailure } from "./centring.js";
+import { findBestSplit, greedyWrap, diagnoseFailure } from "./centring.js";
 
+const DEFAULT_PAGE_WIDTH = 100;
+const DEFAULT_MAX_TITLE_WIDTH = 20;
+
+// Columns drawn either side of the page, so a space count fits left of a line
+// that starts at the page edge
+const GUTTER_CHARS = 4;
 
 document.addEventListener("DOMContentLoaded", () => {
   const pageWidth = document.getElementById("pageWidth");
@@ -13,54 +18,58 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById("paperMockup");
   const ctx = canvas.getContext("2d");
 
+  // Drawing size; the canvas pixels are scaled up by the device pixel ratio
   const canvasWidth = 800;
   const canvasHeight = 400;
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
 
-  let lineX = canvas.width / 2;
+  let lineX = canvasWidth / 2;
   let isDragging = false;
-  let centeredLines;
+  let centredLines = [];
   let cannotBeCentredTimeout = null;
+  let currentPixelRatio = 0;
+
+  function getPageWidth() {
+    return Math.max(1, parseFloat(pageWidth.value) || DEFAULT_PAGE_WIDTH);
+  }
+
+  function getMaxTitleWidth() {
+    return Math.max(1, Math.min(parseFloat(maxTitleWidth.value) || DEFAULT_MAX_TITLE_WIDTH, getPageWidth()));
+  }
+
+  // Width of one character on the canvas
+  function getCharWidth() {
+    return canvasWidth / (getPageWidth() + 2 * GUTTER_CHARS);
+  }
+
+  // Match the canvas resolution to the screen so the text stays sharp.
+  // Returns true if the resolution changed.
+  function matchDevicePixelRatio() {
+    const ratio = window.devicePixelRatio || 1;
+    if (ratio === currentPixelRatio) return false;
+    currentPixelRatio = ratio;
+
+    canvas.width = Math.round(canvasWidth * ratio);
+    canvas.height = Math.round(canvasHeight * ratio);
+    ctx.setTransform(canvas.width / canvasWidth, 0, 0, canvas.height / canvasHeight, 0, 0);
+    return true;
+  }
 
   // Get the saved values from local storage
   function restoreSavedInputs() {
-    const savedWidth = localStorage.getItem("pageWidth");
-    const savedTitle = localStorage.getItem("pageTitle");
-    const savedMaxTitleWidth = localStorage.getItem("maxTitleWidth");
-
-    if (savedWidth !== null) pageWidth.value = savedWidth;
-    if (savedTitle !== null) pageTitle.value = savedTitle;
-    if (savedMaxTitleWidth !== null) maxTitleWidth.value = savedMaxTitleWidth;
+    pageWidth.value = localStorage.getItem("pageWidth") ?? DEFAULT_PAGE_WIDTH;
+    pageTitle.value = localStorage.getItem("pageTitle") ?? "";
+    maxTitleWidth.value = localStorage.getItem("maxTitleWidth") ?? DEFAULT_MAX_TITLE_WIDTH;
 
     restrictMaxTitleWidth();
+    positionLineFromInputs();
     renderPageLayout();
-  }
-
-  function greedyWrap(title, maxWidth) {
-    const words = title.split(" ");
-    const lines = [];
-    let current = [];
-
-    for (const word of words) {
-      const lineIfAdded = [...current, word].join(" ");
-      if (lineIfAdded.length <= maxWidth) {
-        current.push(word);
-      } else {
-        if (current.length) lines.push(current.join(" "));
-        current = [word];
-      }
-    }
-    if (current.length) lines.push(current.join(" "));
-    return lines;
   }
 
   // Calculate the spacing required for the title
   function renderPageLayout() {
-    const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
-    const maxTitleWidthValue = Math.max(1, Math.min(parseFloat(maxTitleWidth.value) || 20, pageWidthValue));
-
-    const title = pageTitle.value.trim() || "";
+    const pageWidthValue = getPageWidth();
+    const maxTitleWidthValue = getMaxTitleWidth();
+    const title = pageTitle.value;
 
     const lines = findBestSplit(title, pageWidthValue, maxTitleWidthValue);
 
@@ -68,9 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (lines === null) {
       cannotBeCentredTimeout = setTimeout(() => {
-        cannotBeCentred.style.visibility = "visible";
-        const diagnosis = diagnoseFailure(title, pageWidthValue, maxTitleWidthValue);
-        cannotBeCentred.textContent = diagnosis ? diagnosis.message : "";
+        showCannotBeCentred(diagnoseFailure(title, pageWidthValue, maxTitleWidthValue));
       }, 500);
     } else {
       cannotBeCentred.style.visibility = "hidden";
@@ -78,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const displayLines = lines ?? greedyWrap(title, maxTitleWidthValue);
 
-    centeredLines = displayLines.map((line) => ({
+    centredLines = displayLines.map((line) => ({
       line,
       spacesNeeded: (pageWidthValue - line.length) / 2,
     }));
@@ -86,37 +93,67 @@ document.addEventListener("DOMContentLoaded", () => {
     drawCanvasContent();
   }
 
+  // Show why the title can't be centred, with a link to the nearest max title
+  // width that works (if there is one)
+  function showCannotBeCentred(diagnosis) {
+    if (!diagnosis) return;
+
+    cannotBeCentred.replaceChildren(diagnosis.message);
+
+    const suggested = diagnosis.suggestedMaxTitleWidth;
+    if (suggested !== null) {
+      const suggestion = document.createElement("button");
+      suggestion.type = "button";
+      suggestion.className = "link";
+      suggestion.title = `Set max title width to ${suggested}`;
+      suggestion.textContent = `try ${suggested}`;
+      suggestion.addEventListener("click", () => setMaxTitleWidth(suggested));
+      cannotBeCentred.append(", ", suggestion);
+    }
+
+    cannotBeCentred.style.visibility = "visible";
+  }
+
   // draw the text and line on the canvas (after clearing)
   function drawCanvasContent() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
-    const charWidth = canvasWidth / pageWidthValue;
-    const fontSize = charWidth * 1.6;
-    ctx.font = `${fontSize}px IBM`;
+    const charWidth = getCharWidth();
+    const pageLeft = GUTTER_CHARS * charWidth;
+    const pageRight = canvasWidth - pageLeft;
+
+    // Size the font so each character is exactly one column wide
+    ctx.font = "100px IBM, monospace";
+    const fontSize = (100 * charWidth) / ctx.measureText("0").width;
+    ctx.font = `${fontSize}px IBM, monospace`;
     ctx.textBaseline = "top";
 
+    // Page edges
+    ctx.beginPath();
+    ctx.moveTo(pageLeft, 0);
+    ctx.lineTo(pageLeft, canvasHeight);
+    ctx.moveTo(pageRight, 0);
+    ctx.lineTo(pageRight, canvasHeight);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.stroke();
+
     const lineHeight = fontSize * 1.2;
-    const startY = (canvasHeight - centeredLines.length * lineHeight) / 2;
+    const startY = (canvasHeight - centredLines.length * lineHeight) / 2;
 
-    centeredLines.forEach((item, index) => {
-      const { line, spacesNeeded } = item;
+    centredLines.forEach(({ line, spacesNeeded }, index) => {
+      const y = startY + index * lineHeight;
+      const lineStart = pageLeft + spacesNeeded * charWidth;
 
-      // Round spacesNeeded when rendering and check if it's a whole number
-      const roundedSpacesNeeded = Math.round(spacesNeeded);
-      const isWholeNumber = spacesNeeded === roundedSpacesNeeded;
+      // Space count just left of the line, in red if it isn't a whole number
+      ctx.textAlign = "right";
+      ctx.fillStyle = Number.isInteger(spacesNeeded) ? "black" : "red";
+      ctx.fillText(`${spacesNeeded}`, lineStart - charWidth, y);
 
-      // Calculate the position of the line based on the rounded spaces
-      const spaceCountText = `${spacesNeeded}`.padStart(4, " ");
-      const x = (canvasWidth - ctx.measureText(`${spaceCountText} ${line}`).width) / 2;
-
-      // Draw space count text in black or red based on if it's a whole number
-      ctx.fillStyle = isWholeNumber ? "black" : "red";
-      ctx.fillText(spaceCountText, x, startY + index * lineHeight);
-
-      // Draw the actual line in gray
+      // The line itself, where it will sit on the page
+      ctx.textAlign = "left";
       ctx.fillStyle = "gray";
-      ctx.fillText(line, x + ctx.measureText(spaceCountText).width, startY + index * lineHeight);
+      ctx.fillText(line, lineStart, y);
     });
 
     ctx.beginPath();
@@ -148,84 +185,76 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fill();
   }
 
-  canvas.addEventListener("mousemove", (e) => {
+  // Pointer position in drawing units (the canvas may be scaled to fit the screen)
+  function toCanvasX(e) {
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
+    return ((e.clientX - rect.left) * canvasWidth) / rect.width;
+  }
 
-    if (Math.abs(mouseX - lineX) < 10) {
-      canvas.style.cursor = "ew-resize";
-    } else {
-      canvas.style.cursor = "default";
-    }
-
-    if (isDragging) {
-      lineX = mouseX;
-      if (lineX < canvas.width / 2) lineX = canvas.width / 2;
-      if (lineX > canvas.width) lineX = canvas.width;
-
-      const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
-      const charWidth = canvasWidth / pageWidthValue;
-      const center = canvasWidth / 2;
-      const offsetPixels = Math.abs(lineX - center);
-      const offsetChars = offsetPixels / charWidth;
-      let newMaxTitleWidth = Math.round(2 * offsetChars);
-
-      // Ensure maxTitleWidth does not go below 1
-      newMaxTitleWidth = Math.max(1, newMaxTitleWidth);
-
-      if (newMaxTitleWidth !== parseFloat(maxTitleWidth.value)) {
-        maxTitleWidth.value = newMaxTitleWidth;
-        localStorage.setItem("maxTitleWidth", newMaxTitleWidth);
-        positionLineFromInputs();
-        renderPageLayout();
-      }
-    }
-  });
-
-  canvas.addEventListener("mousedown", (e) => {
+  // Whether the pointer is close enough to grab the margin line, in screen pixels
+  function isNearLine(e) {
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
+    const lineScreenX = (lineX * rect.width) / canvasWidth;
+    const tolerance = e.pointerType === "mouse" ? 10 : 20;
+    return Math.abs(e.clientX - rect.left - lineScreenX) < tolerance;
+  }
 
-    // If the mouse is near the line
-    if (Math.abs(mouseX - lineX) < 10) {
-      isDragging = true;
-      canvas.style.cursor = "grabbing";
+  // Set the max title width from where the margin line has been dragged to
+  function dragMarginTo(x) {
+    const offsetChars = Math.max(0, x - canvasWidth / 2) / getCharWidth();
+    const newMaxTitleWidth = Math.min(getPageWidth(), Math.max(1, Math.round(2 * offsetChars)));
+
+    if (newMaxTitleWidth !== parseFloat(maxTitleWidth.value)) {
+      setMaxTitleWidth(newMaxTitleWidth);
     }
-  });
+  }
 
-  // mouse up anywhere on the page
-  document.addEventListener("mouseup", () => {
+  function stopDragging() {
+    if (!isDragging) return;
     isDragging = false;
     canvas.style.cursor = "default";
-    drawCanvasContent();
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!isNearLine(e)) return;
+    isDragging = true;
+    canvas.setPointerCapture(e.pointerId);
+    canvas.style.cursor = "grabbing";
   });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (isDragging) {
+      dragMarginTo(toCanvasX(e));
+    } else {
+      canvas.style.cursor = isNearLine(e) ? "ew-resize" : "default";
+    }
+  });
+
+  canvas.addEventListener("pointerup", stopDragging);
+  canvas.addEventListener("pointercancel", stopDragging);
 
   // would like this to work but the validation doesn't really work
   function restrictMaxTitleWidth() {
-    maxTitleWidth.setAttribute("max", pageWidth.value || 100);
-    maxTitleWidthHint.textContent = `Must be between 1 and ${pageWidth.value || 100} (less than page width)`;
+    maxTitleWidth.setAttribute("max", pageWidth.value || DEFAULT_PAGE_WIDTH);
+    maxTitleWidthHint.textContent = `Must be between 1 and ${pageWidth.value || DEFAULT_PAGE_WIDTH} (less than page width)`;
   }
 
   // Update the line position on the canvas with the value from the form
   function positionLineFromInputs() {
-    const pageWidthValue = Math.max(1, parseFloat(pageWidth.value) || 100);
-    const maxTitleWidthValue = Math.max(1, Math.min(parseFloat(maxTitleWidth.value) || 20, pageWidthValue));
-    const charWidth = canvasWidth / pageWidthValue;
-    const center = canvasWidth / 2;
-    const offsetChars = maxTitleWidthValue / 2;
-    const offsetPixels = offsetChars * charWidth;
-    lineX = center + offsetPixels;
+    lineX = canvasWidth / 2 + (getMaxTitleWidth() / 2) * getCharWidth();
+  }
 
-    if (lineX < 0) lineX = 0;
-    if (lineX > canvasWidth) lineX = canvasWidth;
+  function setMaxTitleWidth(value) {
+    maxTitleWidth.value = value;
+    localStorage.setItem("maxTitleWidth", value);
+    positionLineFromInputs();
+    renderPageLayout();
   }
 
   // When anything in the form changes
   function processInputChange(event) {
     const inputId = event.target.id;
     const value = event.target.value;
-
-    console.log(`Input ${inputId} changed to: ${value}`);
 
     if (inputId === "maxTitleWidth" || inputId === "pageWidth") {
       restrictMaxTitleWidth();
@@ -237,12 +266,15 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem(inputId, value);
   }
 
+  matchDevicePixelRatio();
   restoreSavedInputs();
-  positionLineFromInputs();
 
-  // Show page again when font is loaded
-  font.load().then(() => {
-    renderPageLayout();
+  // Redraw once the font has loaded; until then the canvas falls back to monospace
+  document.fonts.load("16px IBM").then(renderPageLayout);
+
+  // Browser zoom and moving between screens can change the pixel ratio
+  window.addEventListener("resize", () => {
+    if (matchDevicePixelRatio()) drawCanvasContent();
   });
 
   pageWidth.addEventListener("input", processInputChange);
